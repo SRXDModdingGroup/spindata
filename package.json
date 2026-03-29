@@ -1,0 +1,17 @@
+{
+  "name": "spindata",
+  "version": "0.1.0",
+  "description": "live game data relay service for SpinShare tournaments",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node --env-file=.env index.js",
+    "dev": "node --watch --env-file=.env index.js",
+    "test": "node tests/test-match-registry.js && node tests/test-store.js"
+  },
+  "dependencies": {
+    "ioredis": "^5.3.2",
+    "ws": "^8.19.0"
+  },
+  "license": "ISC"
+}

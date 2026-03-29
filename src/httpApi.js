@@ -1,0 +1,53 @@
+import { createServer } from 'http';
+import { createMatch, deleteMatch } from './matchRegistry.js';
+
+export function createHttpServer(port, store) {
+	const server = createServer(async (req, res) => {
+		const url = new URL(req.url, `http://localhost`);
+
+		// POST /match — register a match and get player tokens
+		if (req.method === 'POST' && url.pathname === '/match') {
+			let body = '';
+			for await (const chunk of req) body += chunk;
+			let payload;
+			try { payload = JSON.parse(body); } catch {
+				return send(res, 400, { error: 'invalid json' });
+			}
+
+			const { matchId, players } = payload;
+			if (!matchId || !Array.isArray(players) || players.length === 0) {
+				return send(res, 400, { error: 'matchId and players[] required' });
+			}
+
+			const entry = createMatch(matchId, players);
+			return send(res, 200, { matchId: entry.matchId, tokens: entry.tokens });
+		}
+
+		// DELETE /match/:matchId — unregister a match
+		const deleteMatch_ = url.pathname.match(/^\/match\/([^/]+)$/);
+		if (req.method === 'DELETE' && deleteMatch_) {
+			const matchId = decodeURIComponent(deleteMatch_[1]);
+			deleteMatch(matchId);
+			await store.clearMatch(matchId);
+			return send(res, 200, { ok: true });
+		}
+
+		// GET /match/:matchId/results — fetch final scores
+		const resultsMatch = url.pathname.match(/^\/match\/([^/]+)\/results$/);
+		if (req.method === 'GET' && resultsMatch) {
+			const matchId = decodeURIComponent(resultsMatch[1]);
+			const results = await store.getResults(matchId);
+			return send(res, 200, { matchId, results });
+		}
+
+		send(res, 404, { error: 'not found' });
+	});
+
+	server.listen(port, () => console.log(`[http] listening on :${port}`));
+	return server;
+}
+
+function send(res, status, body) {
+	res.writeHead(status, { 'Content-Type': 'application/json' });
+	res.end(JSON.stringify(body));
+}
