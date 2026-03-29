@@ -1,0 +1,41 @@
+name: Build & Push Docker Image
+
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - "**.md"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Get version from package.json
+        id: version
+        run: echo "VERSION=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
+
+      - name: Log in to registry
+        uses: docker/login-action@v3
+        with:
+          registry: registry.ellite.dev
+          username: refbot
+          password: ${{ secrets.REGISTRY_PASSWORD }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          no-cache: true
+          tags: |
+            registry.ellite.dev/ellite/spindata:latest
+            registry.ellite.dev/ellite/spindata:v${{ steps.version.outputs.VERSION }}
+
+      - name: Trigger Portainer Stack redeploy
+        run: |
+          curl -X POST ${{ secrets.PORTAINER_SPINDATA_WEBHOOK }}
