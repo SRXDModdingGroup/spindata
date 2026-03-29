@@ -4,6 +4,14 @@ import { resolveToken } from './matchRegistry.js';
 // subscribers: matchId → Set of WebSocket clients (sssopanel-next etc.)
 const subscribers = new Map();
 
+export function fcFromFullCombo(fullCombo) {
+	return fullCombo != null && fullCombo !== 'None';
+}
+
+export function pfcFromFullCombo(fullCombo) {
+	return fullCombo === 'PerfectPlus' || fullCombo === 'Perfect';
+}
+
 export function createRelayServer(port, store) {
 	const wss = new WebSocketServer({ port });
 
@@ -20,21 +28,46 @@ export function createRelayServer(port, store) {
 		const { matchId, playerId } = identity;
 		console.log(`[relay] ${playerId} connected (match ${matchId})`);
 
+		// per-connection state tracked for result storage
+		let lastScore = null;
+		let lastFullCombo = null;
+
 		ws.on('message', async (raw) => {
 			let msg;
 			try { msg = JSON.parse(raw); } catch { return; }
 
-			if (msg.type === 'live') {
-				const data = { score: msg.score, combo: msg.combo, accuracy: msg.accuracy };
-				await store.setLive(matchId, playerId, data);
-				broadcast(matchId, { type: 'live', matchId, playerId, ...data });
+			// tag every event with matchId + playerId before broadcasting
+			const tagged = { matchId, playerId, ...msg };
 
-			} else if (msg.type === 'chartEnd') {
-				const result = { score: msg.score, fc: !!msg.fc, pfc: !!msg.pfc };
-				await store.setResult(matchId, playerId, result);
-				broadcast(matchId, { type: 'chartEnd', matchId, playerId, ...result });
-				console.log(`[relay] chartEnd ${playerId} score=${msg.score} fc=${msg.fc} pfc=${msg.pfc}`);
+			if (msg.type === 'scoreEvent') {
+				lastScore      = msg.status?.score      ?? lastScore;
+				lastFullCombo  = msg.status?.fullCombo  ?? lastFullCombo;
+				await store.setLive(matchId, playerId, {
+					score:      msg.status?.score,
+					combo:      msg.status?.combo,
+					fullCombo:  msg.status?.fullCombo,
+				});
 			}
+
+			if (msg.type === 'trackComplete' || msg.type === 'trackFail') {
+				const failed = msg.type === 'trackFail';
+				const result = {
+					score: lastScore,
+					fc:    failed ? false : fcFromFullCombo(lastFullCombo),
+					pfc:   failed ? false : pfcFromFullCombo(lastFullCombo),
+				};
+				await store.setResult(matchId, playerId, result);
+				console.log(`[relay] chartEnd ${playerId} score=${result.score} fc=${result.fc} pfc=${result.pfc}`);
+
+				// broadcast the raw event first, then a synthetic chartEnd for convenience
+				broadcast(matchId, tagged);
+				broadcast(matchId, { type: 'chartEnd', matchId, playerId, ...result });
+				lastScore = null;
+				lastFullCombo = null;
+				return;
+			}
+
+			broadcast(matchId, tagged);
 		});
 
 		ws.on('close', () => {

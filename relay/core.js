@@ -1,27 +1,16 @@
 /**
- * RelayCore — manages WebSocket connections between SpinStatus (local) and spindata (upstream).
- * Emits events so the Electron main process can react to state changes.
+ * RelayCore — bridges SpinStatus (local WS) to spindata (upstream WS).
+ * Forwards all SpinStatus events verbatim. Emits local events for the tray UI.
  */
 
 const { EventEmitter } = require('events');
 const { WebSocket } = require('ws');
-const { isFc, isPfc } = require('./judgments');
 
 const SPINSTATUS_URL = 'ws://localhost:38304';
 const RECONNECT_MS = 3000;
 
-const WEIGHTS = { PerfectPlus: 1.0, Perfect: 1.0, Great: 0.75, Good: 0.5, OK: 0.25, Bad: 0.1, Failed: 0 };
-
-function deriveAccuracy(judgments) {
-	if (!judgments) return null;
-	let weighted = 0, total = 0;
-	for (const [k, w] of Object.entries(WEIGHTS)) {
-		const count = judgments[k] ?? 0;
-		weighted += count * w;
-		total += count;
-	}
-	return total === 0 ? null : Math.round((weighted / total) * 10000) / 100;
-}
+function fcFromFullCombo(fc) { return fc != null && fc !== 'None'; }
+function pfcFromFullCombo(fc) { return fc === 'PerfectPlus' || fc === 'Perfect'; }
 
 class RelayCore extends EventEmitter {
 	constructor() {
@@ -29,8 +18,8 @@ class RelayCore extends EventEmitter {
 		this._spinstatusWs = null;
 		this._spindataWs = null;
 		this._reconnectTimer = null;
-		this._lastJudgments = null;
 		this._lastScore = null;
+		this._lastFullCombo = null;
 		this._active = false;
 		this._url = null;
 		this._token = null;
@@ -92,30 +81,29 @@ class RelayCore extends EventEmitter {
 
 		ws.on('message', (raw) => {
 			if (this._spindataWs?.readyState !== WebSocket.OPEN) return;
+
+			// forward verbatim to spindata
+			this._spindataWs.send(raw);
+
+			// parse locally only for tray UI events
 			let msg;
 			try { msg = JSON.parse(raw); } catch { return; }
 
 			if (msg.type === 'scoreEvent') {
-				const s = msg.status;
-				this._lastJudgments = s.judgments ?? null;
-				this._lastScore = s.score ?? null;
-				const payload = { type: 'live', score: s.score, combo: s.combo, accuracy: deriveAccuracy(s.judgments) };
-				this._spindataWs.send(JSON.stringify(payload));
-				this.emit('live', payload);
+				this._lastScore      = msg.status?.score      ?? this._lastScore;
+				this._lastFullCombo  = msg.status?.fullCombo  ?? this._lastFullCombo;
+				this.emit('live', { score: msg.status?.score, combo: msg.status?.combo });
 			}
 
 			if (msg.type === 'trackComplete' || msg.type === 'trackFail') {
 				const failed = msg.type === 'trackFail';
-				const result = {
-					type: 'chartEnd',
+				this.emit('chartEnd', {
 					score: this._lastScore,
-					fc: failed ? false : isFc(this._lastJudgments),
-					pfc: failed ? false : isPfc(this._lastJudgments),
-				};
-				this._spindataWs.send(JSON.stringify(result));
-				this.emit('chartEnd', result);
-				this._lastJudgments = null;
+					fc:    failed ? false : fcFromFullCombo(this._lastFullCombo),
+					pfc:   failed ? false : pfcFromFullCombo(this._lastFullCombo),
+				});
 				this._lastScore = null;
+				this._lastFullCombo = null;
 			}
 		});
 
