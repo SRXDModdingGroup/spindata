@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self'; script-src 'self'">
+  <title>Spindata Relay</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <div class="header">
+    <h1>Spindata Relay</h1>
+    <p>SpinStatus → tournament server</p>
+  </div>
+
+  <div class="status-section">
+    <div class="status-row">
+      <div class="dot disconnected" id="dot-spinstatus"></div>
+      <span class="status-label">SpinStatus (local)</span>
+      <span class="status-value" id="val-spinstatus">disconnected</span>
+    </div>
+    <div class="status-row">
+      <div class="dot disconnected" id="dot-spindata"></div>
+      <span class="status-label">Tournament server</span>
+      <span class="status-value" id="val-spindata">disconnected</span>
+    </div>
+  </div>
+
+  <div class="result-section">
+    <span class="result-label">Last result</span>
+    <span class="result-value" id="last-result">—</span>
+  </div>
+
+  <div class="settings-section">
+    <div class="field">
+      <label for="input-url">Server URL</label>
+      <input type="text" id="input-url" placeholder="ws://tournament.example.com:7701">
+    </div>
+    <div class="field">
+      <label for="input-token">Token</label>
+      <input type="password" id="input-token" placeholder="paste your token here">
+    </div>
+    <div class="error-msg" id="error-msg"></div>
+  </div>
+
+  <div class="footer">
+    <button id="btn-connect">Connect</button>
+    <button id="btn-disconnect">Disconnect</button>
+  </div>
+
+  <script src="renderer.js"></script>
+</body>
+</html>
