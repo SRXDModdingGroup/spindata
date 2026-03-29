@@ -126,14 +126,7 @@ Relay clients connect to `:7701` with their token as a query parameter:
 ws://host:7701?token=<token>
 ```
 
-Messages sent by the client:
-
-```json
-{ "type": "live",     "score": 8000, "combo": 80, "accuracy": 99.0 }
-{ "type": "chartEnd", "score": 12345, "fc": true, "pfc": false }
-```
-
-The server broadcasts these to any subscribers connected on `:7702` for the same match.
+The relay client forwards raw [SpinStatus](https://github.com/TakingFire/SpinStatus) events verbatim. The server handles all processing.
 
 ## WebSocket protocol (subscribers)
 
@@ -143,7 +136,32 @@ Overlays connect to `:7702` with the match ID as a query parameter:
 ws://host:7702?matchId=<matchId>
 ```
 
-They receive the same `live` and `chartEnd` messages as they arrive from players.
+Subscribers receive all SpinStatus events as they arrive, tagged with `matchId` and `playerId`:
+
+```json
+{ "matchId": "match-abc", "playerId": "alice", "type": "scoreEvent",
+  "status": { "score": 8000, "combo": 80, "fullCombo": "PerfectPlus" } }
+
+{ "matchId": "match-abc", "playerId": "alice", "type": "noteEvent",
+  "status": { "accuracy": "PerfectPlus", "type": "Tap", "color": 0 } }
+
+{ "matchId": "match-abc", "playerId": "alice", "type": "trackStart",
+  "status": { "title": "...", "artist": "...", "difficulty": "Expert", "albumArt": "..." } }
+
+{ "matchId": "match-abc", "playerId": "alice", "type": "trackComplete" }
+{ "matchId": "match-abc", "playerId": "alice", "type": "trackFail" }
+{ "matchId": "match-abc", "playerId": "alice", "type": "trackPause" }
+{ "matchId": "match-abc", "playerId": "alice", "type": "trackResume" }
+```
+
+After `trackComplete` or `trackFail`, a synthetic `chartEnd` is also emitted for convenience:
+
+```json
+{ "matchId": "match-abc", "playerId": "alice", "type": "chartEnd",
+  "score": 12345, "fc": true, "pfc": true }
+```
+
+FC/PFC is derived from the `fullCombo` field of the last `scoreEvent` before the track ended.
 
 ## Development
 
