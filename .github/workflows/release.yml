@@ -1,0 +1,43 @@
+name: release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: install dependencies
+        run: npm install
+
+      - name: build binaries
+        run: node scripts/build-relay.js
+
+      - name: install appimagetool
+        run: |
+          wget -q https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage -O /usr/local/bin/appimagetool
+          chmod +x /usr/local/bin/appimagetool
+
+      - name: build AppImage
+        run: |
+          cp dist/spindata-relay-linux appimage/SpindataRelay.AppDir/usr/bin/spindata-relay
+          chmod +x appimage/SpindataRelay.AppDir/usr/bin/spindata-relay
+          ARCH=x86_64 appimagetool appimage/SpindataRelay.AppDir dist/SpindataRelay-x86_64.AppImage
+
+      - name: create release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/spindata-relay.exe
+            dist/SpindataRelay-x86_64.AppImage
