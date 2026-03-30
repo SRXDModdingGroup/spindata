@@ -5,6 +5,7 @@ using HarmonyLib;
 using SpinCore;
 using SpinCore.Translation;
 using SpinCore.UI;
+using UnityEngine;
 
 namespace SpinDataRelay;
 
@@ -22,8 +23,18 @@ public class Plugin : BaseUnityPlugin
 
     internal static ConfigEntry<string> ServerUrl;
     internal static ConfigEntry<string> Token;
+    internal static ConfigEntry<bool> ShowStatusDot;
 
     private Harmony _harmony;
+    private GUIStyle _styleConnected;
+    private GUIStyle _styleConnecting;
+    private GUIStyle _styleDisconnected;
+
+    // Fade state
+    private RelayClient.ConnectionStatus _lastStatus = RelayClient.ConnectionStatus.Disconnected;
+    private float _statusChangeTime;
+    private const float FadeDelay    = 2f;
+    private const float FadeDuration = 1f;
 
     private void Awake()
     {
@@ -35,6 +46,9 @@ public class Plugin : BaseUnityPlugin
         Token = Config.Bind(
             "Connection", "Token", "",
             "Match token provided by the tournament bot");
+        ShowStatusDot = Config.Bind(
+            "UI", "ShowStatusDot", true,
+            "Show the connection status indicator in the top-right corner of the screen");
 
         RegisterTranslations();
         RegisterSettingsPage();
@@ -56,6 +70,56 @@ public class Plugin : BaseUnityPlugin
         RelayClient.Disconnect();
     }
 
+    private static GUIStyle MakeSymbolStyle(Color color) => new GUIStyle
+    {
+        fontSize  = 16,
+        alignment = TextAnchor.UpperRight,
+        normal    = { textColor = color },
+    };
+
+    private void OnGUI()
+    {
+        if (!ShowStatusDot.Value) return;
+
+        // GUIStyle must be initialised inside OnGUI (GUI.skin not available earlier)
+        if (_styleConnected == null)
+        {
+            _styleConnected    = MakeSymbolStyle(Color.green);
+            _styleConnecting   = MakeSymbolStyle(new Color(1f, 0.75f, 0f)); // amber
+            _styleDisconnected = MakeSymbolStyle(Color.red);
+        }
+
+        var status = RelayClient.Status;
+        if (status != _lastStatus)
+        {
+            _lastStatus        = status;
+            _statusChangeTime  = Time.unscaledTime;
+        }
+
+        float alpha = 1f;
+        if (status == RelayClient.ConnectionStatus.Connected)
+        {
+            float elapsed = Time.unscaledTime - _statusChangeTime;
+            alpha = 1f - Mathf.Clamp01((elapsed - FadeDelay) / FadeDuration);
+        }
+
+        if (alpha <= 0f) return;
+
+        var (symbol, style) = status switch
+        {
+            RelayClient.ConnectionStatus.Connected  => ("✔", _styleConnected),
+            RelayClient.ConnectionStatus.Connecting => ("↻", _styleConnecting),
+            _                                       => ("✖", _styleDisconnected),
+        };
+
+        const int size   = 24;
+        const int margin = 8;
+        var prevColor = GUI.color;
+        GUI.color = new Color(1f, 1f, 1f, alpha);
+        GUI.Label(new Rect(Screen.width - size - margin, margin, size, size), symbol, style);
+        GUI.color = prevColor;
+    }
+
     private static void RegisterTranslations()
     {
         // Implicit string → TranslatedString operator sets English; other languages fall back to en.
@@ -64,6 +128,8 @@ public class Plugin : BaseUnityPlugin
         TranslationHelper.AddTranslation("SpinDataRelay_ServerUrlLabel",  "Server URL");
         TranslationHelper.AddTranslation("SpinDataRelay_TokenLabel",      "Match Token");
         TranslationHelper.AddTranslation("SpinDataRelay_ConnectButton",   "Connect");
+        TranslationHelper.AddTranslation("SpinDataRelay_UIHeader",        "Interface");
+        TranslationHelper.AddTranslation("SpinDataRelay_ShowStatusDot",   "Show Connection Status Indicator");
     }
 
     private static void RegisterSettingsPage()
@@ -95,6 +161,14 @@ public class Plugin : BaseUnityPlugin
                     else
                         Logger.LogWarning("Cannot connect: no token set.");
                 });
+
+            UIHelper.CreateSectionHeader(pageTransform, "UI Header",
+                "SpinDataRelay_UIHeader", false);
+
+            UIHelper.CreateLargeToggle(pageTransform, "Show Status Indicator Toggle",
+                "SpinDataRelay_ShowStatusDot",
+                ShowStatusDot.Value,
+                val => ShowStatusDot.Value = val);
         };
 
         UIHelper.RegisterMenuInModSettingsRoot("SpinDataRelay_ModSettings", page);

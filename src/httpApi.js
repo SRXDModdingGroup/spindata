@@ -1,7 +1,6 @@
 import { createServer } from 'http';
-import { createMatch, deleteMatch } from './matchRegistry.js';
 
-export function createHttpServer(port, store) {
+export function createHttpServer(port, store, registry) {
 	const server = createServer(async (req, res) => {
 		const url = new URL(req.url, `http://localhost`);
 
@@ -19,7 +18,7 @@ export function createHttpServer(port, store) {
 				return send(res, 400, { error: 'matchId and players[] required' });
 			}
 
-			const entry = createMatch(matchId, players);
+			const entry = await registry.createMatch(matchId, players);
 			return send(res, 200, { matchId: entry.matchId, tokens: entry.tokens });
 		}
 
@@ -27,7 +26,7 @@ export function createHttpServer(port, store) {
 		const deleteMatch_ = url.pathname.match(/^\/match\/([^/]+)$/);
 		if (req.method === 'DELETE' && deleteMatch_) {
 			const matchId = decodeURIComponent(deleteMatch_[1]);
-			deleteMatch(matchId);
+			await registry.deleteMatch(matchId);
 			await store.clearMatch(matchId);
 			return send(res, 200, { ok: true });
 		}

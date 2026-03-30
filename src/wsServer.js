@@ -1,5 +1,4 @@
 import { WebSocketServer, WebSocket } from 'ws';
-import { resolveToken } from './matchRegistry.js';
 
 // subscribers: matchId → Set of WebSocket clients (sssopanel-next etc.)
 const subscribers = new Map();
@@ -12,13 +11,13 @@ export function pfcFromFullCombo(fullCombo) {
 	return fullCombo === 'PerfectPlus' || fullCombo === 'Perfect';
 }
 
-export function createRelayServer(port, store) {
+export function createRelayServer(port, store, registry) {
 	const wss = new WebSocketServer({ port });
 
-	wss.on('connection', (ws, req) => {
+	wss.on('connection', async (ws, req) => {
 		const url = new URL(req.url, 'http://localhost');
 		const token = url.searchParams.get('token');
-		const identity = resolveToken(token);
+		const identity = await registry.resolveToken(token);
 
 		if (!identity) {
 			ws.close(4001, 'invalid token');
