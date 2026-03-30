@@ -1,0 +1,16 @@
+- event: ["push"]
+  tag: ["v*"]
+
+engine: "nixery"
+
+dependencies:
+  nixpkgs:
+    - dotnet-sdk_8
+    - git
+
+steps:
+  - name: Build mod DLL
+    command: |
+      cd mod
+      dotnet build -c Release
+      echo "Built: $(ls bin/Release/net472/SpinDataRelay.dll)"

@@ -1,0 +1,49 @@
+- event: ["push"]
+  branch: ["main"]
+
+engine: "nixery"
+
+dependencies:
+  nixpkgs:
+    - crane
+    - curl
+    - git
+    - jq
+    - kaniko
+    - nodejs
+    - openssh
+
+steps:
+  - name: Build and push Docker image
+    command: |
+      VERSION=$(node -p "require('./package.json').version")
+      mkdir -p $HOME/.docker
+      AUTH=$(echo -n "refbot:$REGISTRY_PASSWORD" | base64)
+      echo "{\"auths\":{\"registry.ellite.dev\":{\"auth\":\"$AUTH\"}}}" > $HOME/.docker/config.json
+      executor \
+        --context=dir://$(pwd) \
+        --cache=false \
+        --dockerfile=$(pwd)/Dockerfile \
+        --destination=registry.ellite.dev/ellite/spindata:latest \
+        --destination=registry.ellite.dev/ellite/spindata:v$VERSION
+
+  - name: Verify image on registry
+    command: |
+      crane digest registry.ellite.dev/ellite/spindata:latest
+
+  - name: Update Portainer Stack
+    command: |
+      CURRENT_ENV=$(curl -s -H "X-API-Key: $PORTAINER_TOKEN" \
+        "https://portainer.ellite.dev/api/stacks/<STACK_ID>" | jq -c '.Env // []')
+
+      COMPOSE=$(curl -s -H "X-API-Key: $PORTAINER_TOKEN" \
+        "https://portainer.ellite.dev/api/stacks/<STACK_ID>/file" | jq -r '.StackFileContent')
+
+      curl -s -m 120 -X PUT \
+        "https://portainer.ellite.dev/api/stacks/<STACK_ID>?endpointId=2" \
+        -H "X-API-Key: $PORTAINER_TOKEN" \
+        -H "Content-Type: application/json" \
+        -d "{\"stackFileContent\": $(echo "$COMPOSE" | jq -Rs .), \"env\": $CURRENT_ENV, \"pullImage\": true}" \
+        > /dev/null 2>&1
+
+      echo "Stack updated successfully"
