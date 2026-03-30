@@ -1,6 +1,7 @@
-- event: ["push"]
-  branch: ["main"]
----
+when:
+  - event: ["push"]
+    branch: ["main"]
+
 engine: "nixery"
 
 dependencies:

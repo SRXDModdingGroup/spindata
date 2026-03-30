@@ -1,6 +1,7 @@
-- event: ["push"]
-  tag: ["v*"]
----
+when:
+  - event: ["push"]
+    tag: ["v*"]
+
 engine: "nixery"
 
 dependencies:
