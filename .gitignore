@@ -2,3 +2,5 @@ node_modules/
 .env
 dist/
 .claude/
+mod/bin/
+mod/obj/

@@ -6,48 +6,21 @@ on:
       - 'v*'
 
 jobs:
-  build-linux:
+  build-mod:
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-dotnet@v4
         with:
-          node-version: 20
+          dotnet-version: '8.0'
 
-      - name: install relay deps
-        working-directory: relay
-        run: npm install
+      - name: build mod
+        working-directory: mod
+        run: dotnet build -c Release
 
-      - name: build AppImage
-        working-directory: relay
-        run: npm run build:linux
-
-      - name: upload AppImage
+      - name: upload mod DLL
         uses: softprops/action-gh-release@v2
         with:
-          files: relay/dist/*.AppImage
-
-  build-windows:
-    runs-on: windows-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-
-      - name: install relay deps
-        working-directory: relay
-        run: npm install
-
-      - name: build EXE
-        working-directory: relay
-        run: npm run build:win
-
-      - name: upload EXE
-        uses: softprops/action-gh-release@v2
-        with:
-          files: relay/dist/*.exe
+          files: mod/bin/Release/net472/SpinDataRelay.dll

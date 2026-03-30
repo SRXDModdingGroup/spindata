@@ -1,0 +1,48 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net472</TargetFramework>
+    <AssemblyName>SpinDataRelay</AssemblyName>
+    <Version>1.0.0</Version>
+    <LangVersion>latest</LangVersion>
+    <RestoreAdditionalProjectSources>
+      https://api.nuget.org/v3/index.json;
+      https://nuget.bepinex.dev/v3/index.json;
+    </RestoreAdditionalProjectSources>
+    <GameDir>/home/deck/.local/share/Steam/steamapps/common/Spin Rhythm</GameDir>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="BepInEx.Analyzers" Version="1.*" PrivateAssets="all" />
+    <PackageReference Include="BepInEx.Core" Version="5.*" />
+    <PackageReference Include="BepInEx.PluginInfoProps" Version="2.*" />
+    <PackageReference Include="UnityEngine.Modules" Version="6000.0.37" IncludeAssets="compile" />
+  </ItemGroup>
+
+  <!-- All three DLLs are committed to lib/ so CI can build without a game install.         -->
+  <!-- SpinStatus: ServerBehavior to patch + WebSocketSharp client + SimpleJSON (all in)   -->
+  <!-- SpinCore:   UIHelper, TranslationHelper, settings UI                                -->
+  <!-- Assembly-CSharp: needed for overload resolution on SpinCore methods that expose     -->
+  <!--   TranslationReference in their signatures (no internal members needed, no publicize) -->
+  <ItemGroup>
+    <Reference Include="SpinStatus">
+      <HintPath>lib/SpinStatus.dll</HintPath>
+    </Reference>
+    <Reference Include="SpinCore">
+      <HintPath>lib/SpinCore.dll</HintPath>
+    </Reference>
+    <Reference Include="Assembly-CSharp">
+      <HintPath>lib/Assembly-CSharp.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+
+  <!-- Copy the built DLL straight into BepInEx/plugins after every local build. -->
+  <Target Name="PostBuild" AfterTargets="Build"
+          Condition="Exists('$(GameDir)/BepInEx/plugins')">
+    <Copy SourceFiles="$(TargetPath)"
+          DestinationFolder="$(GameDir)/BepInEx/plugins"
+          SkipUnchangedFiles="false" OverwriteReadOnlyFiles="true" />
+    <Message Text="Copied $(AssemblyName).dll → $(GameDir)/BepInEx/plugins" Importance="high" />
+  </Target>
+
+</Project>
