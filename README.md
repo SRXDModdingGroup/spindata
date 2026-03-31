@@ -1,5 +1,7 @@
 # spindata
 
+> **mirror** - primary repo is at [tangled.org/alpine.girlfag.club/spindata](https://tangled.org/alpine.girlfag.club/spindata)
+
 Live game data relay service for SpinShare tournaments. Collects real-time score data from players running the [SpinStatus](https://github.com/TakingFire/SpinStatus) mod and makes it available to tournament tooling and stream overlays.
 
 ## How it works
