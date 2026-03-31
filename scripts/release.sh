@@ -60,11 +60,15 @@ EOF
 
 echo "==> Committing and tagging"
 git add mod/SpinDataRelay.csproj mod/Plugin.cs README.md
-git commit -m "release: ${TAG}"
+git diff --staged --quiet || git commit -m "release: ${TAG}"
 git tag "$TAG"
 
-echo "==> Pushing"
-git push origin main
+echo "==> Pushing to tangled"
+git push tangled main
+git push tangled "$TAG"
+
+echo "==> Pushing to github"
+git push origin main --force
 git push origin "$TAG"
 
 echo "==> Creating GitHub release"
