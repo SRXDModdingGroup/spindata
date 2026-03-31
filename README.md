@@ -4,16 +4,16 @@ Live game data relay service for SpinShare tournaments. Collects real-time score
 
 ## How it works
 
-Players run a small tray app (the relay client) that bridges SpinStatus on their machine to the spindata server. The server authenticates each player by match token, buffers live data, and exposes it over WebSocket for overlays and over HTTP for the referee bot.
+Players install the SpinData Relay mod, which bridges SpinStatus on their machine to the spindata server. The server authenticates each player by match token, buffers live data, and exposes it over WebSocket for overlays and over HTTP for the referee bot.
 
 ```
 SpinStatus (player machine)
     |
-relay client (player runs this)
+SpinData Relay mod (player installs this)
     |
 spindata server
     |-- HTTP  :7700  tournament bot polls for final scores
-    |-- WS    :7701  relay clients connect (authenticated by token)
+    |-- WS    :7701  relay mod connects (authenticated by token)
     +-- WS    :7702  overlay subscribers (e.g. sssopanel-next)
 ```
 
@@ -101,32 +101,35 @@ DELETE /match/:matchId
 
 Removes the match registration and clears all stored data for that match.
 
-## Relay client
+## Mod
 
-The relay client is a system tray app for Windows and Linux. Players download it, paste in the server URL and their token, and click Connect. It runs in the background while they play and forwards score data automatically.
+SpinData Relay is a BepInEx plugin. Players install it, then configure the server URL and their match token via Mod Settings in-game.
 
-Pre-built binaries (`.exe` and `.AppImage`) are attached to each [release](../../releases).
+**Dependencies:**
+- [BepInEx 5](https://github.com/BepInEx/BepInEx)
+- [SpinStatus](https://github.com/TakingFire/SpinStatus)
+- [SpinCore](https://github.com/SRXDModdingGroup/SpinCore)
+
+<!-- mod-download -->
+**Latest release:** [v1.0.0](https://github.com/SRXDModdingGroup/spindata/releases/download/v1.0.0/SpinDataRelay.dll)
+<!-- /mod-download -->
 
 ### Building locally
 
 ```
-cd relay
-npm install
-npm start          # run in dev mode
-npm run build      # build for current platform
-npm run build:win  # cross-compile Windows EXE
-npm run build:linux # build Linux AppImage
+cd mod
+dotnet build -c Release
 ```
 
-## WebSocket protocol (relay clients)
+## WebSocket protocol (mod)
 
-Relay clients connect to `:7701` with their token as a query parameter:
+The mod connects to `:7701` with its token as a query parameter:
 
 ```
 ws://host:7701?token=<token>
 ```
 
-The relay client forwards raw [SpinStatus](https://github.com/TakingFire/SpinStatus) events verbatim. The server handles all processing.
+The mod forwards raw [SpinStatus](https://github.com/TakingFire/SpinStatus) events verbatim. The server handles all processing.
 
 ## WebSocket protocol (subscribers)
 
