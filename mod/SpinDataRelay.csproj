@@ -34,6 +34,9 @@
     <Reference Include="Assembly-CSharp">
       <HintPath>lib/Assembly-CSharp.dll</HintPath>
     </Reference>
+    <Reference Include="Unity.TextMeshPro">
+      <HintPath>lib/Unity.TextMeshPro.dll</HintPath>
+    </Reference>
   </ItemGroup>
 
   <!-- Copy the built DLL straight into BepInEx/plugins after every local build. -->

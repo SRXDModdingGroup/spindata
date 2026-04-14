@@ -5,6 +5,7 @@ using HarmonyLib;
 using SpinCore;
 using SpinCore.Translation;
 using SpinCore.UI;
+using TMPro;
 using UnityEngine;
 
 namespace SpinDataRelay;
@@ -41,7 +42,7 @@ public class Plugin : BaseUnityPlugin
         Logger = base.Logger;
 
         ServerUrl = Config.Bind(
-            "Connection", "ServerUrl", "ws://localhost:7701",
+            "Connection", "ServerUrl", "ws://207.180.220.125:7701",
             "WebSocket URL of the spindata relay port");
         Token = Config.Bind(
             "Connection", "Token", "",
@@ -143,13 +144,15 @@ public class Plugin : BaseUnityPlugin
 
             UIHelper.CreateLabel(pageTransform, "Server URL Label",
                 "SpinDataRelay_ServerUrlLabel");
-            UIHelper.CreateInputField(pageTransform, "Server URL Field",
+            var serverUrlField = UIHelper.CreateInputField(pageTransform, "Server URL Field",
                 (_, newVal) => ServerUrl.Value = newVal);
+            serverUrlField.InputField.text = ServerUrl.Value;
 
             UIHelper.CreateLabel(pageTransform, "Token Label",
                 "SpinDataRelay_TokenLabel");
-            UIHelper.CreateInputField(pageTransform, "Token Field",
+            var tokenField = UIHelper.CreateInputField(pageTransform, "Token Field",
                 (_, newVal) => Token.Value = newVal);
+            tokenField.InputField.text = Token.Value;
 
             UIHelper.CreateButton(pageTransform, "Connect Button",
                 "SpinDataRelay_ConnectButton",
@@ -172,5 +175,29 @@ public class Plugin : BaseUnityPlugin
         };
 
         UIHelper.RegisterMenuInModSettingsRoot("SpinDataRelay_ModSettings", page);
+
+        UIHelper.RegisterGroupInQuickModSettings(panelTransform =>
+        {
+            var section = UIHelper.CreateGroup(panelTransform, "SpinDataRelay Section");
+            UIHelper.CreateSectionHeader(section.Transform, "Quick Header",
+                "SpinDataRelay_ModSettings", false);
+
+            UIHelper.CreateLabel(section.Transform, "Quick Token Label",
+                "SpinDataRelay_TokenLabel");
+            var quickTokenField = UIHelper.CreateInputField(section.Transform, "Quick Token Field",
+                (_, newVal) => Token.Value = newVal);
+            quickTokenField.InputField.text = Token.Value;
+
+            UIHelper.CreateButton(section.Transform, "Quick Connect Button",
+                "SpinDataRelay_ConnectButton",
+                () =>
+                {
+                    RelayClient.Disconnect();
+                    if (!string.IsNullOrWhiteSpace(Token.Value))
+                        RelayClient.Connect(ServerUrl.Value, Token.Value);
+                    else
+                        Logger.LogWarning("Cannot connect: no token set.");
+                });
+        });
     }
 }
