@@ -18,7 +18,7 @@ public class Plugin : BaseUnityPlugin
 {
     public const string Guid    = "spindata.relay";
     public const string Name    = "SpinData Relay";
-    public const string Version = "1.0.0";
+    public const string Version = "1.1.0";
 
     internal static new ManualLogSource Logger;
 
