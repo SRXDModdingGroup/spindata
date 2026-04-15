@@ -1,3 +1,4 @@
+using System;
 using System.Threading;
 using WebSocketSharp;
 
@@ -8,6 +9,9 @@ internal static class RelayClient
     public enum ConnectionStatus { Disconnected, Connecting, Connected }
 
     public static ConnectionStatus Status { get; private set; } = ConnectionStatus.Disconnected;
+
+    // fired on the WS receive thread — handlers must be thread-safe
+    public static event Action<string> MessageReceived;
 
     private static WebSocket _ws;
     private static string _url;
@@ -55,6 +59,9 @@ internal static class RelayClient
             Plugin.Logger.LogWarning($"Disconnected from spindata server: {e.Reason}");
             ScheduleReconnect();
         };
+
+        _ws.OnMessage += (sender, e) =>
+            MessageReceived?.Invoke(e.Data);
 
         _ws.OnError += (sender, e) =>
             Plugin.Logger.LogError($"SpinData relay error: {e.Message}");

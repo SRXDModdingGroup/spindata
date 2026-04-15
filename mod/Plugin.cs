@@ -37,6 +37,13 @@ public class Plugin : BaseUnityPlugin
     private const float FadeDelay    = 2f;
     private const float FadeDuration = 1f;
 
+    // Hash mismatch warning — set from WS thread, read in OnGUI (main thread)
+    private static volatile bool _hashMismatchPending = false;
+    private bool   _showingHashWarning = false;
+    private float  _hashWarningTime;
+    private const float HashWarningDuration = 8f;
+    private GUIStyle _styleWarning;
+
     private void Awake()
     {
         Logger = base.Logger;
@@ -59,16 +66,31 @@ public class Plugin : BaseUnityPlugin
         else
             Logger.LogWarning("No token configured — open Mod Settings > SpinData Relay in-game to set one.");
 
+        RelayClient.MessageReceived += OnRelayMessage;
+
         _harmony = new Harmony(Guid);
         _harmony.PatchAll(typeof(Patches));
+        _harmony.PatchAll(typeof(ChartHasher));
 
         Logger.LogInfo($"{Name} {Version} loaded");
     }
 
     private void OnDestroy()
     {
+        RelayClient.MessageReceived -= OnRelayMessage;
         _harmony.UnpatchSelf();
         RelayClient.Disconnect();
+    }
+
+    private static void OnRelayMessage(string raw)
+    {
+        try
+        {
+            var json = SimpleJSON.JSON.Parse(raw);
+            if (json["type"].Value == "chartHashMismatch")
+                _hashMismatchPending = true;
+        }
+        catch { /* malformed message, ignore */ }
     }
 
     private static GUIStyle MakeSymbolStyle(Color color) => new GUIStyle
@@ -80,15 +102,51 @@ public class Plugin : BaseUnityPlugin
 
     private void OnGUI()
     {
-        if (!ShowStatusDot.Value) return;
-
         // GUIStyle must be initialised inside OnGUI (GUI.skin not available earlier)
         if (_styleConnected == null)
         {
             _styleConnected    = MakeSymbolStyle(Color.green);
             _styleConnecting   = MakeSymbolStyle(new Color(1f, 0.75f, 0f)); // amber
             _styleDisconnected = MakeSymbolStyle(Color.red);
+            _styleWarning = new GUIStyle
+            {
+                fontSize  = 18,
+                fontStyle = FontStyle.Bold,
+                alignment = TextAnchor.UpperCenter,
+                wordWrap  = true,
+                normal    = { textColor = Color.red },
+            };
         }
+
+        // pick up mismatch flag set by the WS thread
+        if (_hashMismatchPending)
+        {
+            _hashMismatchPending = false;
+            _showingHashWarning  = true;
+            _hashWarningTime     = Time.unscaledTime;
+        }
+
+        if (_showingHashWarning)
+        {
+            float elapsed = Time.unscaledTime - _hashWarningTime;
+            if (elapsed >= HashWarningDuration)
+            {
+                _showingHashWarning = false;
+            }
+            else
+            {
+                float alpha = 1f - Mathf.Clamp01((elapsed - (HashWarningDuration - 1f)) / 1f);
+                var prevColor = GUI.color;
+                GUI.color = new Color(1f, 1f, 1f, alpha);
+                GUI.Label(
+                    new Rect(Screen.width / 2f - 200f, 60f, 400f, 60f),
+                    "Wrong chart loaded!",
+                    _styleWarning);
+                GUI.color = prevColor;
+            }
+        }
+
+        if (!ShowStatusDot.Value) return;
 
         var status = RelayClient.Status;
         if (status != _lastStatus)
@@ -97,14 +155,14 @@ public class Plugin : BaseUnityPlugin
             _statusChangeTime  = Time.unscaledTime;
         }
 
-        float alpha = 1f;
+        float dotAlpha = 1f;
         if (status == RelayClient.ConnectionStatus.Connected)
         {
             float elapsed = Time.unscaledTime - _statusChangeTime;
-            alpha = 1f - Mathf.Clamp01((elapsed - FadeDelay) / FadeDuration);
+            dotAlpha = 1f - Mathf.Clamp01((elapsed - FadeDelay) / FadeDuration);
         }
 
-        if (alpha <= 0f) return;
+        if (dotAlpha <= 0f) return;
 
         var (symbol, style) = status switch
         {
@@ -115,10 +173,10 @@ public class Plugin : BaseUnityPlugin
 
         const int size   = 24;
         const int margin = 8;
-        var prevColor = GUI.color;
-        GUI.color = new Color(1f, 1f, 1f, alpha);
+        var prev = GUI.color;
+        GUI.color = new Color(1f, 1f, 1f, dotAlpha);
         GUI.Label(new Rect(Screen.width - size - margin, margin, size, size), symbol, style);
-        GUI.color = prevColor;
+        GUI.color = prev;
     }
 
     private static void RegisterTranslations()

@@ -12,6 +12,8 @@ internal static class Patches
     [HarmonyPostfix]
     static void Postfix(JSONObject json)
     {
+        if (json["type"].Value == "trackStart")
+            json["status"]["chartHash"] = ChartHasher.LastHash;
         RelayClient.Send(json.ToString());
     }
 }
