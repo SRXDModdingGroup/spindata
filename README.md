@@ -111,7 +111,7 @@ SpinData Relay is a BepInEx plugin. Players install it, then configure the serve
 - [SpinCore](https://github.com/SRXDModdingGroup/SpinCore)
 
 <!-- mod-download -->
-**Latest release:** [v1.2.0](https://github.com/SRXDModdingGroup/spindata/releases/download/v1.2.0/SpinDataRelay.dll)
+**Latest release:** [v1.3.0](https://github.com/SRXDModdingGroup/spindata/releases/download/v1.3.0/SpinDataRelay.dll)
 <!-- /mod-download -->
 
 ### Building locally
