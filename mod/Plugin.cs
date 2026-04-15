@@ -44,6 +44,19 @@ public class Plugin : BaseUnityPlugin
     private const float HashWarningDuration = 8f;
     private GUIStyle _styleWarning;
 
+    // Ready check panel — set from WS thread via volatile, drained in OnGUI
+    private static volatile bool _readyCheckPending = false;
+    private static string _pendingFileRef;
+    private static string _pendingTitle;
+    private bool   _showReadyPanel  = false;
+    private bool   _chartInstalled  = false;
+    private bool   _downloadDone    = false;  // volatile-safe: written on Task thread, read in OnGUI
+    private bool   _downloadFailed  = false;
+    private bool   _readySent       = false;
+    private GUIStyle _stylePanelBg;
+    private GUIStyle _stylePanelText;
+    private GUIStyle _stylePanelBtn;
+
     private void Awake()
     {
         Logger = base.Logger;
@@ -87,10 +100,29 @@ public class Plugin : BaseUnityPlugin
         try
         {
             var json = SimpleJSON.JSON.Parse(raw);
-            if (json["type"].Value == "chartHashMismatch")
-                _hashMismatchPending = true;
+            switch (json["type"].Value)
+            {
+                case "chartHashMismatch":
+                    _hashMismatchPending = true;
+                    break;
+                case "readyCheck":
+                    _pendingFileRef    = json["fileReference"].Value;
+                    _pendingTitle      = json["title"].Value;
+                    _readyCheckPending = true;
+                    break;
+            }
         }
         catch { /* malformed message, ignore */ }
+    }
+
+    private static Texture2D MakeTex(int w, int h, Color col)
+    {
+        var tex = new Texture2D(w, h);
+        var pixels = new Color[w * h];
+        for (int i = 0; i < pixels.Length; i++) pixels[i] = col;
+        tex.SetPixels(pixels);
+        tex.Apply();
+        return tex;
     }
 
     private static GUIStyle MakeSymbolStyle(Color color) => new GUIStyle
@@ -115,6 +147,22 @@ public class Plugin : BaseUnityPlugin
                 alignment = TextAnchor.UpperCenter,
                 wordWrap  = true,
                 normal    = { textColor = Color.red },
+            };
+            _stylePanelBg = new GUIStyle(GUI.skin.box)
+            {
+                normal = { background = MakeTex(1, 1, new Color(0f, 0f, 0f, 0.75f)) },
+            };
+            _stylePanelText = new GUIStyle(GUI.skin.label)
+            {
+                fontSize  = 16,
+                wordWrap  = true,
+                alignment = TextAnchor.MiddleCenter,
+                normal    = { textColor = Color.white },
+            };
+            _stylePanelBtn = new GUIStyle(GUI.skin.button)
+            {
+                fontSize  = 16,
+                fontStyle = FontStyle.Bold,
             };
         }
 
@@ -144,6 +192,80 @@ public class Plugin : BaseUnityPlugin
                     _styleWarning);
                 GUI.color = prevColor;
             }
+        }
+
+        // pick up ready check from WS thread and check installation on main thread
+        if (_readyCheckPending)
+        {
+            _readyCheckPending = false;
+            _downloadDone      = false;
+            _downloadFailed    = false;
+            _readySent         = false;
+            _chartInstalled    = ChartDownloader.IsInstalled(_pendingFileRef);
+            _showReadyPanel    = true;
+        }
+
+        // drain async download results
+        if (_downloadDone)
+        {
+            _downloadDone   = false;
+            _chartInstalled = true;
+            NotificationSystemGUI.AddMessage("Chart downloaded! Find it in the song list.", 6f);
+        }
+        if (_downloadFailed)
+        {
+            _downloadFailed = false;
+            NotificationSystemGUI.AddMessage("Chart download failed. Check your connection.", 6f);
+        }
+
+        if (_showReadyPanel && !_readySent)
+        {
+            const float panelW = 420f;
+            const float panelH = 160f;
+            float px = (Screen.width  - panelW) / 2f;
+            float py = (Screen.height - panelH) / 2f;
+            var panelRect = new Rect(px, py, panelW, panelH);
+
+            GUI.Box(panelRect, GUIContent.none, _stylePanelBg);
+
+            GUILayout.BeginArea(new Rect(px + 16f, py + 12f, panelW - 32f, panelH - 24f));
+
+            var title = string.IsNullOrEmpty(_pendingTitle) ? _pendingFileRef : _pendingTitle;
+            GUILayout.Label($"Ready Check\n<b>{title}</b>", _stylePanelText);
+            GUILayout.Space(8f);
+
+            if (ChartDownloader.IsDownloading)
+            {
+                GUILayout.Label("Downloading chart...", _stylePanelText);
+            }
+            else if (_chartInstalled)
+            {
+                if (GUILayout.Button("Ready!", _stylePanelBtn))
+                {
+                    _readySent = true;
+                    RelayClient.Send(SimpleJSON.JSON.Parse("{\"type\":\"playerReady\"}").ToString());
+                    NotificationSystemGUI.AddMessage("Signalled ready!", 3f);
+                }
+            }
+            else
+            {
+                GUILayout.BeginHorizontal();
+                if (GUILayout.Button("Download chart", _stylePanelBtn))
+                {
+                    var fileRef = _pendingFileRef;
+                    _ = System.Threading.Tasks.Task.Run(async () =>
+                    {
+                        bool ok = await ChartDownloader.Download(fileRef);
+                        if (ok) _downloadDone   = true;
+                        else    _downloadFailed = true;
+                    });
+                }
+                if (GUILayout.Button("Skip", _stylePanelBtn))
+                    _showReadyPanel = false;
+                GUILayout.EndHorizontal();
+            }
+
+            GUILayout.EndArea();
         }
 
         if (!ShowStatusDot.Value) return;
