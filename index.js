@@ -21,6 +21,6 @@ if (REDIS_URL) {
 	console.log('[spindata] using MemoryStore + MemoryRegistry (no REDIS_URL set)');
 }
 
-createHttpServer(HTTP_PORT, store, registry);
-createRelayServer(RELAY_PORT, store, registry);
+const { pushToMatch } = createRelayServer(RELAY_PORT, store, registry);
+createHttpServer(HTTP_PORT, store, registry, pushToMatch);
 createSubscribeServer(SUBSCRIBE_PORT);

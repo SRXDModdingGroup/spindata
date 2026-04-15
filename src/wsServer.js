@@ -26,6 +26,17 @@ export function buildChartResult(score, fullCombo, chartHash, expectedHash, fail
 
 export function createRelayServer(port, store, registry) {
 	const wss = new WebSocketServer({ port });
+	// matchId → Set of player ws connections (for pushing messages down to players)
+	const matchConnections = new Map();
+
+	function pushToMatch(matchId, payload) {
+		const conns = matchConnections.get(matchId);
+		if (!conns?.size) return;
+		const msg = JSON.stringify(payload);
+		for (const ws of conns) {
+			if (ws.readyState === WebSocket.OPEN) ws.send(msg);
+		}
+	}
 
 	wss.on('connection', async (ws, req) => {
 		const url = new URL(req.url, 'http://localhost');
@@ -39,6 +50,9 @@ export function createRelayServer(port, store, registry) {
 
 		const { matchId, playerId } = identity;
 		console.log(`[relay] ${playerId} connected (match ${matchId})`);
+
+		if (!matchConnections.has(matchId)) matchConnections.set(matchId, new Set());
+		matchConnections.get(matchId).add(ws);
 
 		// per-connection state tracked for result storage
 		let lastScore = null;
@@ -91,12 +105,13 @@ export function createRelayServer(port, store, registry) {
 		});
 
 		ws.on('close', () => {
+			matchConnections.get(matchId)?.delete(ws);
 			console.log(`[relay] ${playerId} disconnected (match ${matchId})`);
 		});
 	});
 
 	console.log(`[relay] listening on :${port}`);
-	return wss;
+	return { wss, pushToMatch };
 }
 
 export function createSubscribeServer(port) {

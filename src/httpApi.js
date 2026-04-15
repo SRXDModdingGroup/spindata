@@ -1,6 +1,6 @@
 import { createServer } from 'http';
 
-export function createHttpServer(port, store, registry) {
+export function createHttpServer(port, store, registry, pushToMatch) {
 	const server = createServer(async (req, res) => {
 		const url = new URL(req.url, `http://localhost`);
 
@@ -46,6 +46,24 @@ export function createHttpServer(port, store, registry) {
 				return send(res, 400, { error: 'chartHash required' });
 			}
 			await registry.setExpectedHash(matchId, chartHash);
+			return send(res, 200, { ok: true });
+		}
+
+		// POST /match/:matchId/readyCheck — push a ready check to all connected players
+		const readyCheckMatch = url.pathname.match(/^\/match\/([^/]+)\/readyCheck$/);
+		if (req.method === 'POST' && readyCheckMatch) {
+			const matchId = decodeURIComponent(readyCheckMatch[1]);
+			let body = '';
+			for await (const chunk of req) body += chunk;
+			let payload;
+			try { payload = JSON.parse(body); } catch {
+				return send(res, 400, { error: 'invalid json' });
+			}
+			const { fileReference, title } = payload;
+			if (!fileReference || typeof fileReference !== 'string') {
+				return send(res, 400, { error: 'fileReference required' });
+			}
+			pushToMatch?.(matchId, { type: 'readyCheck', matchId, fileReference, title: title ?? null });
 			return send(res, 200, { ok: true });
 		}
 

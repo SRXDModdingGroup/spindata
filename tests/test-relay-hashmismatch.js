@@ -50,7 +50,7 @@ function setup() {
 // wait for wss to be listening
 function serve(store, registry) {
 	return new Promise(resolve => {
-		const wss = createRelayServer(PORT, store, registry);
+		const { wss } = createRelayServer(PORT, store, registry);
 		wss.on('listening', () => resolve(wss));
 	});
 }
@@ -83,7 +83,7 @@ const { registry: r2, store: s2, match: m2 } = setup();
 const wss2 = await new Promise(resolve => {
 	// reuse port after closing first server
 	wss.close(() => {
-		const w = createRelayServer(PORT, s2, r2);
+		const { wss: w } = createRelayServer(PORT, s2, r2);
 		w.on('listening', () => resolve(w));
 	});
 });
