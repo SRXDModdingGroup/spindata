@@ -11,6 +11,19 @@ export function pfcFromFullCombo(fullCombo) {
 	return fullCombo === 'PerfectPlus' || fullCombo === 'Perfect';
 }
 
+export function buildChartResult(score, fullCombo, chartHash, expectedHash, failed) {
+	const ch = chartHash ?? null;
+	const ex = expectedHash ?? null;
+	return {
+		score,
+		fc:                failed ? false : fcFromFullCombo(fullCombo),
+		pfc:               failed ? false : pfcFromFullCombo(fullCombo),
+		chartHash:         ch,
+		expectedChartHash: ex,
+		hashValid:         ch !== null && ex !== null ? ch === ex : null,
+	};
+}
+
 export function createRelayServer(port, store, registry) {
 	const wss = new WebSocketServer({ port });
 
@@ -30,6 +43,7 @@ export function createRelayServer(port, store, registry) {
 		// per-connection state tracked for result storage
 		let lastScore = null;
 		let lastFullCombo = null;
+		let lastChartHash = null;
 
 		ws.on('message', async (raw) => {
 			let msg;
@@ -37,6 +51,15 @@ export function createRelayServer(port, store, registry) {
 
 			// tag every event with matchId + playerId before broadcasting
 			const tagged = { matchId, playerId, ...msg };
+
+			if (msg.type === 'trackStart') {
+				lastChartHash = msg.status?.chartHash ?? null;
+				if (lastChartHash !== null) {
+					const expectedHash = await registry.getExpectedHash(matchId);
+					if (expectedHash !== null && lastChartHash !== expectedHash)
+						ws.send(JSON.stringify({ type: 'chartHashMismatch' }));
+				}
+			}
 
 			if (msg.type === 'scoreEvent') {
 				lastScore      = msg.status?.score      ?? lastScore;
@@ -50,19 +73,17 @@ export function createRelayServer(port, store, registry) {
 
 			if (msg.type === 'trackComplete' || msg.type === 'trackFail') {
 				const failed = msg.type === 'trackFail';
-				const result = {
-					score: lastScore,
-					fc:    failed ? false : fcFromFullCombo(lastFullCombo),
-					pfc:   failed ? false : pfcFromFullCombo(lastFullCombo),
-				};
+				const expectedHash = await registry.getExpectedHash(matchId);
+				const result = buildChartResult(lastScore, lastFullCombo, lastChartHash, expectedHash, failed);
 				await store.setResult(matchId, playerId, result);
-				console.log(`[relay] chartEnd ${playerId} score=${result.score} fc=${result.fc} pfc=${result.pfc}`);
+				console.log(`[relay] chartEnd ${playerId} score=${result.score} fc=${result.fc} pfc=${result.pfc} hash=${result.chartHash ?? 'none'}`);
 
 				// broadcast the raw event first, then a synthetic chartEnd for convenience
 				broadcast(matchId, tagged);
 				broadcast(matchId, { type: 'chartEnd', matchId, playerId, ...result });
 				lastScore = null;
 				lastFullCombo = null;
+				lastChartHash = null;
 				return;
 			}
 

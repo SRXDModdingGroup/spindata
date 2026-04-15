@@ -66,6 +66,17 @@ assert('getResults returns all players', store.getResults('match-1'), {
 assertNull('getResult unknown player returns null', store.getResult('match-1', 'nobody'));
 assert('getResults unknown match returns empty object', store.getResults('nope'), {});
 
+store.setResult('match-2', 'carol', { score: 9000, fc: true, pfc: false, chartHash: 'abc123' });
+assert('getResult preserves chartHash', store.getResult('match-2', 'carol'), { score: 9000, fc: true, pfc: false, chartHash: 'abc123' });
+
+store.setResult('match-2', 'dave', { score: 8000, fc: false, pfc: false, chartHash: null });
+assert('getResult preserves null chartHash', store.getResult('match-2', 'dave'), { score: 8000, fc: false, pfc: false, chartHash: null });
+
+assert('getResults includes chartHash for all players', store.getResults('match-2'), {
+	carol: { score: 9000, fc: true, pfc: false, chartHash: 'abc123' },
+	dave:  { score: 8000, fc: false, pfc: false, chartHash: null },
+});
+
 // ---------------------------------------------------------------------------
 // clearMatch
 // ---------------------------------------------------------------------------

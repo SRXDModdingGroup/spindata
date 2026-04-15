@@ -31,6 +31,24 @@ export function createHttpServer(port, store, registry) {
 			return send(res, 200, { ok: true });
 		}
 
+		// PUT /match/:matchId/expectedHash — set the expected chart hash for server-side validation
+		const expectedHashMatch = url.pathname.match(/^\/match\/([^/]+)\/expectedHash$/);
+		if (req.method === 'PUT' && expectedHashMatch) {
+			const matchId = decodeURIComponent(expectedHashMatch[1]);
+			let body = '';
+			for await (const chunk of req) body += chunk;
+			let payload;
+			try { payload = JSON.parse(body); } catch {
+				return send(res, 400, { error: 'invalid json' });
+			}
+			const { chartHash } = payload;
+			if (!chartHash || typeof chartHash !== 'string') {
+				return send(res, 400, { error: 'chartHash required' });
+			}
+			await registry.setExpectedHash(matchId, chartHash);
+			return send(res, 200, { ok: true });
+		}
+
 		// GET /match/:matchId/results — fetch final scores
 		const resultsMatch = url.pathname.match(/^\/match\/([^/]+)\/results$/);
 		if (req.method === 'GET' && resultsMatch) {

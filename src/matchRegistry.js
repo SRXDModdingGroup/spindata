@@ -39,6 +39,16 @@ export class MemoryRegistry {
 		return this._matches.get(matchId) ?? null;
 	}
 
+	setExpectedHash(matchId, hash) {
+		const entry = this._matches.get(matchId);
+		if (!entry) return;
+		entry.expectedHash = hash;
+	}
+
+	getExpectedHash(matchId) {
+		return this._matches.get(matchId)?.expectedHash ?? null;
+	}
+
 	deleteMatch(matchId) {
 		const entry = this._matches.get(matchId);
 		if (!entry) return;
@@ -95,12 +105,23 @@ export class RedisRegistry {
 		return raw ? JSON.parse(raw) : null;
 	}
 
+	_expectedHashKey(matchId) { return `spindata:registry:expectedHash:${matchId}`; }
+
+	async setExpectedHash(matchId, hash) {
+		await this._redis.set(this._expectedHashKey(matchId), hash, 'EX', 86400);
+	}
+
+	async getExpectedHash(matchId) {
+		return await this._redis.get(this._expectedHashKey(matchId));
+	}
+
 	async deleteMatch(matchId) {
 		const raw = await this._redis.get(this._matchKey(matchId));
 		if (!raw) return;
 		const entry = JSON.parse(raw);
 		const pipe = this._redis.pipeline();
 		pipe.del(this._matchKey(matchId));
+		pipe.del(this._expectedHashKey(matchId));
 		for (const tok of Object.values(entry.tokens)) pipe.del(this._tokenKey(tok));
 		await pipe.exec();
 	}

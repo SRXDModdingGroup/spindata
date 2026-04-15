@@ -111,5 +111,25 @@ const replaced = reg.createMatch('match-3', ['eve']);
 assert('re-registering a matchId replaces old entry', replaced.players, ['eve']);
 assertNull('old player token is invalidated after replacement', reg.resolveToken(replaced.tokens['dave']));
 
+// ---------------------------------------------------------------------------
+// setExpectedHash / getExpectedHash
+// ---------------------------------------------------------------------------
+console.log('\n── setExpectedHash / getExpectedHash ──────────────────────────\n');
+
+const regHash = new MemoryRegistry();
+regHash.createMatch('hash-match', ['p1', 'p2']);
+
+assertNull('getExpectedHash returns null before set', regHash.getExpectedHash('hash-match'));
+assertNull('getExpectedHash returns null for unknown match', regHash.getExpectedHash('nope'));
+
+regHash.setExpectedHash('hash-match', 'abc123');
+assert('getExpectedHash returns stored hash', regHash.getExpectedHash('hash-match'), 'abc123');
+
+regHash.setExpectedHash('hash-match', 'xyz789');
+assert('setExpectedHash overwrites previous hash', regHash.getExpectedHash('hash-match'), 'xyz789');
+
+regHash.deleteMatch('hash-match');
+assertNull('getExpectedHash returns null after deleteMatch', regHash.getExpectedHash('hash-match'));
+
 console.log(`\n${passed} passed, ${failed} failed\n`);
 if (failed > 0) process.exit(1);
